@@ -57,7 +57,7 @@ let select_files files =
         draw ()
     | '\n' | '\r' ->
         running := false
-    | 'q' | '\027' ->
+    | 'q' ->
         Array.fill selected 0 (Array.length selected) false;
         running := false
     | 'j' ->

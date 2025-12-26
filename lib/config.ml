@@ -31,14 +31,8 @@ let rec parse_node = function
 let parse_repo_config name json =
   match json with
   | `Assoc items ->
-      let github_config = try
-        match List.assoc "github" items with
-        | gh -> parse_github gh
-        with Not_found -> { token = None; owner = None; repo = None; description = None }
-      in
-      let tree_items = List.filter (fun (k, _) -> k <> "github") items in
-      let tree = Directory (List.map (fun (name, value) -> (name, parse_node value)) tree_items) in
-      { name; tree; github = github_config }
+      let tree = Directory (List.map (fun (name, value) -> (name, parse_node value)) items) in
+      { name; tree }
   | _ -> failwith (Printf.sprintf "Repo config '%s' must be a JSON object" name)
 
 let parse_config json_string config_dir =
@@ -48,5 +42,8 @@ let parse_config json_string config_dir =
       let repos = List.map (fun (name, value) -> parse_repo_config name value) items in
       { repos; config_dir }
   | _ -> failwith "Config must be a JSON object"
-tree = Directory (List.map (fun (name, value) -> (name, parse_node value)) items) in
-      { name; tree
+
+let load_config config_file =
+  let config_dir = Filename.dirname config_file in
+  let json_string = In_channel.with_open_text config_file In_channel.input_all in
+  parse_config json_string config_dir

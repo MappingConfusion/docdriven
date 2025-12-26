@@ -1,5 +1,9 @@
 open Docdriven.Parser
 
+(* Custom testable for option types *)
+let reject = Alcotest.testable (fun ppf _ -> Fmt.pf ppf "<rejected>") (fun _ _ -> false)
+[@@warning "-32"]
+
 (* Test parse_source_ref *)
 
 let test_parse_codeblock_ref () =
@@ -78,7 +82,7 @@ let test_extract_block_content () =
 let test_extract_block_indices () =
   let blocks = extract_codeblocks sample_markdown in
   let python_blocks = List.assoc "python" blocks in
-  let indices = List.map (fun b -> b.index) python_blocks in
+  let indices = List.map (fun (b : codeblock) -> b.index) python_blocks in
   Alcotest.(check (list int)) "indices" [0; 1] indices
 
 let test_extract_empty_markdown () =
@@ -106,7 +110,7 @@ let test_get_codeblock_by_ref () =
   match get_codeblock fixture_dir source_ref with
   | Some content ->
       Alcotest.(check bool) "contains def hello" true 
-        (String.contains content (String.sub "def hello" 0 9))
+        (String.sub content 0 9 = "def hello")
   | None -> Alcotest.fail "Expected to extract codeblock"
 
 let test_get_nonexistent_index () =
@@ -122,9 +126,6 @@ let test_get_nonexistent_language () =
   match get_codeblock fixture_dir source_ref with
   | Some _ -> Alcotest.fail "Should return None for missing language"
   | None -> ()
-
-(* Custom testable for option types *)
-let reject = Alcotest.testable (fun ppf _ -> Fmt.pf ppf "<rejected>") (fun _ _ -> false)
 
 (* Test suite *)
 let () =

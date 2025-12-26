@@ -3,8 +3,9 @@ let parse_env_file path =
   else
     In_channel.with_open_text path (fun ic ->
       let rec read_lines acc =
-        try
-          let line = In_channel.input_line ic in
+        match In_channel.input_line ic with
+        | None -> List.rev acc
+        | Some line ->
           let trimmed = String.trim line in
           if trimmed = "" || String.starts_with ~prefix:"#" trimmed then
             read_lines acc
@@ -14,7 +15,6 @@ let parse_env_file path =
                 let value = String.concat "=" rest |> String.trim in
                 read_lines ((String.trim key, value) :: acc)
             | _ -> read_lines acc
-        with End_of_file -> List.rev acc
       in
       read_lines []
     )

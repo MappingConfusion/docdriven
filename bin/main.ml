@@ -205,4 +205,4 @@ let default_cmd =
   let info = Cmd.info "docdriven" ~version:"0.1.0" ~doc in
   Cmd.group info [push_group; list_cmd]
 
-let () = exit (Cmd.eval default_cmd)
+let () = exit (Cmd.eval' default_cmd)

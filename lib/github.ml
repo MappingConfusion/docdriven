@@ -1,5 +1,3 @@
-open Lwt.Syntax
-
 type config = {
   token : string;
   owner : string;
@@ -63,13 +61,14 @@ let rec upload_structure config config_dir allowed_files prefix = function
       end else
         Lwt.return_ok ()
   | Config.Directory items ->
-      Lwt_list.iter_s (fun (name, node) ->
+      let%lwt () = Lwt_list.iter_s (fun (name, node) ->
         let path = if prefix = "" then name else prefix ^ "/" ^ name in
         let%lwt result = upload_structure config config_dir allowed_files path node in
         match result with
         | Ok () -> Lwt.return_unit
         | Error msg -> Lwt.fail_with msg
-      ) items >>= fun () -> Lwt.return_ok ()
+      ) items in
+      Lwt.return_ok ()
 
 let push config tree config_dir allowed_files =
   let%lwt create_result = create_repo config in
@@ -78,10 +77,11 @@ let push config tree config_dir allowed_files =
   | Ok () ->
       match tree with
       | Config.Directory items ->
-          Lwt_list.iter_s (fun (name, node) ->
+          let%lwt () = Lwt_list.iter_s (fun (name, node) ->
             let%lwt result = upload_structure config config_dir allowed_files name node in
             match result with
             | Ok () -> Lwt.return_unit
             | Error msg -> Lwt.fail_with msg
-          ) items >>= fun () -> Lwt.return_ok ()
+          ) items in
+          Lwt.return_ok ()
       | Config.File _ -> Lwt.return_error "Config root must be a directory"
