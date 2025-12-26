@@ -1,3 +1,4 @@
 (test
  (name test_parser)
- (libraries docdriven alcotest))
+ (libraries docdriven alcotest)
+ (deps (glob_files fixtures/*)))

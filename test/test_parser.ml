@@ -96,7 +96,7 @@ let test_extract_no_codeblocks () =
 (* Test get_codeblock integration *)
 
 let test_get_whole_file () =
-  let fixture_dir = "test/fixtures" in
+  let fixture_dir = "fixtures" in
   let source_ref = { file = "whole_file.txt"; language = None; index = None } in
   match get_codeblock fixture_dir source_ref with
   | Some content ->
@@ -105,7 +105,7 @@ let test_get_whole_file () =
   | None -> Alcotest.fail "Expected to read whole file"
 
 let test_get_codeblock_by_ref () =
-  let fixture_dir = "test/fixtures" in
+  let fixture_dir = "fixtures" in
   let source_ref = { file = "sample.md"; language = Some "python"; index = Some 0 } in
   match get_codeblock fixture_dir source_ref with
   | Some content ->
@@ -114,14 +114,14 @@ let test_get_codeblock_by_ref () =
   | None -> Alcotest.fail "Expected to extract codeblock"
 
 let test_get_nonexistent_index () =
-  let fixture_dir = "test/fixtures" in
+  let fixture_dir = "fixtures" in
   let source_ref = { file = "sample.md"; language = Some "python"; index = Some 99 } in
   match get_codeblock fixture_dir source_ref with
   | Some _ -> Alcotest.fail "Should return None for invalid index"
   | None -> ()
 
 let test_get_nonexistent_language () =
-  let fixture_dir = "test/fixtures" in
+  let fixture_dir = "fixtures" in
   let source_ref = { file = "sample.md"; language = Some "rust"; index = Some 0 } in
   match get_codeblock fixture_dir source_ref with
   | Some _ -> Alcotest.fail "Should return None for missing language"

@@ -14,6 +14,7 @@ type repo_config = {
 type t = {
   repos : repo_config list;
   config_dir : string;
+  owner : string;
 }
 
 let rec parse_node = function
@@ -35,15 +36,24 @@ let parse_repo_config name json =
       { name; tree }
   | _ -> failwith (Printf.sprintf "Repo config '%s' must be a JSON object" name)
 
-let parse_config json_string config_dir =
+let derive_owner config_dir =
+  (* Get parent folder name as default owner *)
+  let normalized = if config_dir = "." then Sys.getcwd () else config_dir in
+  Filename.basename normalized
+
+let parse_config json_string config_dir owner_override =
   let json = Yojson.Basic.from_string json_string in
   match json with
   | `Assoc items ->
+      let owner = match owner_override with
+        | Some o -> o
+        | None -> derive_owner config_dir
+      in
       let repos = List.map (fun (name, value) -> parse_repo_config name value) items in
-      { repos; config_dir }
+      { repos; config_dir; owner }
   | _ -> failwith "Config must be a JSON object"
 
-let load_config config_file =
+let load_config config_file owner_override =
   let config_dir = Filename.dirname config_file in
   let json_string = In_channel.with_open_text config_file In_channel.input_all in
-  parse_config json_string config_dir
+  parse_config json_string config_dir owner_override

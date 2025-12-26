@@ -25,6 +25,24 @@ docdriven unassigned --limit 0     # all unassigned blocks
 
 Shows which codeblocks in your documentation aren't assigned to any repository files, helping identify documentation gaps.
 
+**Validate configuration:**
+```bash
+docdriven validate                 # validates docdriven.json
+docdriven validate myconfig.json   # validates specific config
+```
+
+Checks all file and codeblock references in your configuration to ensure:
+- Referenced markdown files exist
+- Codeblock indices are within range
+- Reference syntax is valid
+
+**Check ownership conflicts:**
+```bash
+docdriven conflicts -o /path/to/repo   # check for conflicts before pushing
+```
+
+When multiple documentation sources manage the same repository, this checks for ownership conflicts by reading the `Owner:` field from existing generated files. Helps prevent accidentally overwriting files owned by other teams/docs.
+
 **Push to local:**
 ```bash
 docdriven push local BACKEND              # one repo
@@ -79,9 +97,19 @@ Create `docdriven.json` in your documentation root:
 
 Each top-level key (BACKEND, FRONTEND, etc.) is a **repo name** in UPPERCASE.
 
+**Ownership Tracking:**
+- Owner identifies which team/project owns this documentation
+- Default: Parent folder name of `docdriven.json`
+- Override: Set `DOCDRIVEN_OWNER=team-name` in `.env`
+- Embedded in generated file headers for conflict detection
+- Use `docdriven conflicts` to check before overwriting files from other sources
+
 **Environment Configuration (.env):**
 
 ```bash
+# Owner identification (optional, defaults to folder name)
+DOCDRIVEN_OWNER=backend-team
+
 # Shared GitHub token (fallback for all repos)
 DOCDRIVEN_GITHUB=ghp_shared_token
 

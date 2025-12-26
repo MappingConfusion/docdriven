@@ -16,7 +16,7 @@ let extract_content config_dir source_str =
        | None -> failwith (Printf.sprintf "Codeblock not found: %s" source_str))
   | None -> failwith (Printf.sprintf "Invalid source reference: %s" source_str)
 
-let generate_file config_dir output_path source =
+let generate_file config_dir owner output_path source =
   let sources, content = match source with
     | Config.Single s -> 
         [s], extract_content config_dir s
@@ -25,7 +25,7 @@ let generate_file config_dir output_path source =
                   |> List.map (extract_content config_dir)
                   |> String.concat "\n\n")
   in
-  let header = Comments.generate_header output_path sources in
+  let header = Comments.generate_header output_path owner sources in
   let full_content = header ^ content in
   let dir = Filename.dirname output_path in
   ensure_directory dir;
@@ -33,24 +33,24 @@ let generate_file config_dir output_path source =
     Out_channel.output_string oc full_content
   )
 
-let rec generate_structure config_dir base_path rel_path allowed_files = function
+let rec generate_structure config_dir owner base_path rel_path allowed_files = function
   | Config.File source ->
       if List.mem rel_path allowed_files then
-        generate_file config_dir base_path source
+        generate_file config_dir owner base_path source
   | Config.Directory items ->
       List.iter (fun (name, node) ->
         let full_path = Filename.concat base_path name in
         let new_rel_path = if rel_path = "" then name else rel_path ^ "/" ^ name in
-        generate_structure config_dir full_path new_rel_path allowed_files node
+        generate_structure config_dir owner full_path new_rel_path allowed_files node
       ) items
 
-let generate output_dir config_dir tree allowed_files =
+let generate output_dir config_dir owner tree allowed_files =
   if not (Sys.file_exists output_dir) then
     Unix.mkdir output_dir 0o755;
   match tree with
   | Config.Directory items ->
       List.iter (fun (name, node) ->
         let full_path = Filename.concat output_dir name in
-        generate_structure config_dir full_path name allowed_files node
+        generate_structure config_dir owner full_path name allowed_files node
       ) items
   | Config.File _ -> failwith "Config root must be a directory"

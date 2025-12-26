@@ -47,7 +47,7 @@ let upload_file config path content =
   else
     Lwt.return_error (Printf.sprintf "Failed to upload %s: %d - %s" path code body_str)
 
-let rec upload_structure config config_dir allowed_files prefix = function
+let rec upload_structure config config_dir doc_owner allowed_files prefix = function
   | Config.File source ->
       if List.mem prefix allowed_files then begin
         let sources, content = match source with
@@ -55,7 +55,7 @@ let rec upload_structure config config_dir allowed_files prefix = function
           | Config.Multiple sources ->
               sources, (sources |> List.map (Generator.extract_content config_dir) |> String.concat "\n\n")
         in
-        let header = Comments.generate_header prefix sources in
+        let header = Comments.generate_header prefix doc_owner sources in
         let full_content = header ^ content in
         upload_file config prefix full_content
       end else
@@ -63,14 +63,14 @@ let rec upload_structure config config_dir allowed_files prefix = function
   | Config.Directory items ->
       let%lwt () = Lwt_list.iter_s (fun (name, node) ->
         let path = if prefix = "" then name else prefix ^ "/" ^ name in
-        let%lwt result = upload_structure config config_dir allowed_files path node in
+        let%lwt result = upload_structure config config_dir doc_owner allowed_files path node in
         match result with
         | Ok () -> Lwt.return_unit
         | Error msg -> Lwt.fail_with msg
       ) items in
       Lwt.return_ok ()
 
-let push config tree config_dir allowed_files =
+let push config tree config_dir doc_owner allowed_files =
   let%lwt create_result = create_repo config in
   match create_result with
   | Error msg -> Lwt.return_error msg
@@ -78,7 +78,7 @@ let push config tree config_dir allowed_files =
       match tree with
       | Config.Directory items ->
           let%lwt () = Lwt_list.iter_s (fun (name, node) ->
-            let%lwt result = upload_structure config config_dir allowed_files name node in
+            let%lwt result = upload_structure config config_dir doc_owner allowed_files name node in
             match result with
             | Ok () -> Lwt.return_unit
             | Error msg -> Lwt.fail_with msg

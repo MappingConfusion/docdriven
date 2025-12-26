@@ -27,6 +27,9 @@ let get env key =
   try Some (List.assoc key env)
   with Not_found -> None
 
+let get_owner env =
+  get env "DOCDRIVEN_OWNER"
+
 let get_local_path env repo_name =
   let key = Printf.sprintf "DOCDRIVEN_%s_LOCAL" repo_name in
   get env key

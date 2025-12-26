@@ -21,26 +21,38 @@ let parse_source_ref str =
       Some { file; language = Some language; index = Some index }
   | None ->
       (* Try parsing whole file reference: file or file? *)
-      let file_pattern = Re.Perl.compile_pat {|^(.+?)\??$|} in
-      match Re.exec_opt file_pattern str with
-      | Some groups ->
-          let file = Re.Group.get groups 1 in
-          Some { file; language = None; index = None }
-      | None -> None
+      (* Reject if there are any brackets (invalid format) *)
+      if String.contains str '[' || String.contains str ']' then
+        None
+      else
+        let file_pattern = Re.Perl.compile_pat {|^(.+?)\??$|} in
+        match Re.exec_opt file_pattern str with
+        | Some groups ->
+            let file = Re.Group.get groups 1 in
+            Some { file; language = None; index = None }
+        | None -> None
 
 let extract_codeblocks content =
   let fence_pattern = Re.Perl.compile_pat {|```(\w+)\n([\s\S]*?)```|} in
   let matches = Re.all fence_pattern content in
-  let blocks = List.mapi (fun idx group ->
+  let blocks = List.map (fun group ->
     let language = Re.Group.get group 1 in
     let content = Re.Group.get group 2 in
-    (language, { language; content; index = idx })
+    (language, { language; content; index = 0 })  (* Temporary index *)
   ) matches in
-  List.fold_left (fun acc (lang, block) ->
+  (* Group by language *)
+  let grouped = List.fold_left (fun acc (lang, block) ->
     let lang_blocks = try List.assoc lang acc with Not_found -> [] in
     (lang, block :: lang_blocks) :: List.remove_assoc lang acc
-  ) [] blocks
-  |> List.map (fun (lang, blocks) -> (lang, List.rev blocks))
+  ) [] blocks in
+  (* Reverse blocks and assign proper indices per language *)
+  List.map (fun (lang, blocks) -> 
+    let reversed = List.rev blocks in
+    let indexed = List.mapi (fun idx (block : codeblock) -> 
+      { language = block.language; content = block.content; index = idx }
+    ) reversed in
+    (lang, indexed)
+  ) grouped
 
 let get_codeblock config_dir source_ref =
   let full_path = Filename.concat config_dir source_ref.file in

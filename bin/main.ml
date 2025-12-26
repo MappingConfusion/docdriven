@@ -17,8 +17,10 @@ let find_repo config repo_name =
 
 let push_local config_file repo_names output_dir interactive only exclude =
   try
-    let config = Docdriven.Config.load_config config_file in
-    let env = Docdriven.Dotenv.load config.config_dir in
+    let config_dir = Filename.dirname config_file in
+    let env = Docdriven.Dotenv.load config_dir in
+    let owner = Docdriven.Dotenv.get_owner env in
+    let config = Docdriven.Config.load_config config_file owner in
     let selected = get_selected_files config repo_names interactive only exclude in
     if selected = [] then begin
       Printf.printf "No files selected.\n";
@@ -39,7 +41,7 @@ let push_local config_file repo_names output_dir interactive only exclude =
             | Some d -> d
             | None -> failwith (Printf.sprintf "DOCDRIVEN_%s_LOCAL not found in .env" repo_name)
         in
-        Docdriven.Generator.generate dir config.config_dir repo.tree paths;
+        Docdriven.Generator.generate dir config.config_dir config.owner repo.tree paths;
         Printf.printf "[%s] Generated %d files in: %s\n" repo_name (List.length paths) dir
       ) by_repo;
       0
@@ -54,8 +56,10 @@ let push_local config_file repo_names output_dir interactive only exclude =
 
 let push_github config_file repo_names token interactive only exclude =
   try
-    let config = Docdriven.Config.load_config config_file in
-    let env = Docdriven.Dotenv.load config.config_dir in
+    let config_dir = Filename.dirname config_file in
+    let env = Docdriven.Dotenv.load config_dir in
+    let owner = Docdriven.Dotenv.get_owner env in
+    let config = Docdriven.Config.load_config config_file owner in
     let selected = get_selected_files config repo_names interactive only exclude in
     if selected = [] then begin
       Printf.printf "No files selected.\n";
@@ -81,7 +85,7 @@ let push_github config_file repo_names token interactive only exclude =
           | None -> failwith (Printf.sprintf "GitHub repo not found. Set DOCDRIVEN_%s_GITHUB_REPO=owner/repo in .env" repo_name)
         in
         let gh_config = { Docdriven.Github.token = gh_token; owner; repo = repo_gh } in
-        match Lwt_main.run (Docdriven.Github.push gh_config repo.tree config.config_dir paths) with
+        match Lwt_main.run (Docdriven.Github.push gh_config repo.tree config.config_dir config.owner paths) with
         | Ok () ->
             Printf.printf "[%s] Pushed %d files to GitHub: https://github.com/%s/%s\n" repo_name (List.length paths) owner repo_gh
         | Error msg ->
@@ -98,7 +102,10 @@ let push_github config_file repo_names token interactive only exclude =
       1
 
 let push_auto config_file repo_names output_dir token interactive only exclude =
-  let config = Docdriven.Config.load_config config_file in
+  let config_dir = Filename.dirname config_file in
+  let env = Docdriven.Dotenv.load config_dir in
+  let owner = Docdriven.Dotenv.get_owner env in
+  let config = Docdriven.Config.load_config config_file owner in
   let env = Docdriven.Dotenv.load config.config_dir in
   
   (* Check if we have local or GitHub setup for any of the target repos *)
@@ -122,7 +129,7 @@ let push_auto config_file repo_names output_dir token interactive only exclude =
 
 let list_files config_file repo_names =
   try
-    let config = Docdriven.Config.load_config config_file in
+    let config = Docdriven.Config.load_config config_file None in
     let all_files = Docdriven.Selector.collect_all_repos_files config.repos in
     let filtered = Docdriven.Selector.filter_by_repos all_files repo_names in
     
@@ -154,7 +161,7 @@ let list_files config_file repo_names =
 
 let unassigned_blocks config_file limit =
   try
-    let config = Docdriven.Config.load_config config_file in
+    let config = Docdriven.Config.load_config config_file None in
     let limit_value = match limit with
       | None -> Some 10
       | Some 0 -> None
@@ -200,6 +207,46 @@ let unassigned_blocks config_file limit =
         Printf.printf "Use --limit 0 to show all %d unassigned codeblocks\n" unassigned_count;
       
       0
+    end
+  with
+  | Failure msg ->
+      Printf.eprintf "Error: %s\n" msg;
+      1
+  | Sys_error msg ->
+      Printf.eprintf "System error: %s\n" msg;
+      1
+
+let validate_config config_file =
+  try
+    let config = Docdriven.Config.load_config config_file None in
+    let errors = Docdriven.Validator.validate_config config in
+    Docdriven.Validator.print_results errors
+  with
+  | Failure msg ->
+      Printf.eprintf "Error: %s\n" msg;
+      1
+  | Sys_error msg ->
+      Printf.eprintf "System error: %s\n" msg;
+      1
+
+let check_conflicts config_file output_dir =
+  try
+    let config_dir = Filename.dirname config_file in
+    let env = Docdriven.Dotenv.load config_dir in
+    let owner = Docdriven.Dotenv.get_owner env in
+    let config = Docdriven.Config.load_config config_file owner in
+    let conflicts = Docdriven.Validator.check_ownership_conflicts config output_dir in
+    if conflicts = [] then begin
+      Printf.printf "✅ No ownership conflicts found.\n";
+      Printf.printf "Owner: %s\n" config.owner;
+      0
+    end else begin
+      Printf.printf "⚠️  Found %d ownership conflict(s):\n\n" (List.length conflicts);
+      List.iter (fun err ->
+        Printf.printf "%s\n" (Docdriven.Validator.string_of_error err)
+      ) conflicts;
+      Printf.printf "\n";
+      1
     end
   with
   | Failure msg ->
@@ -261,6 +308,16 @@ let unassigned_cmd =
   let info = Cmd.info "unassigned" ~doc in
   Cmd.v info Term.(const unassigned_blocks $ config_arg $ limit_arg)
 
+let validate_cmd =
+  let doc = "validate all references in configuration" in
+  let info = Cmd.info "validate" ~doc in
+  Cmd.v info Term.(const validate_config $ config_arg)
+
+let conflicts_cmd =
+  let doc = "check for ownership conflicts with existing files" in
+  let info = Cmd.info "conflicts" ~doc in
+  Cmd.v info Term.(const check_conflicts $ config_arg $ Arg.(required & opt (some string) None & info ["o"; "output"] ~docv:"DIR" ~doc:"Output directory to check"))
+
 let push_group =
   let doc = "push repository to targets" in
   let info = Cmd.info "push" ~doc in
@@ -269,6 +326,6 @@ let push_group =
 let default_cmd =
   let doc = "generate repository structures from documented codeblocks" in
   let info = Cmd.info "docdriven" ~version:"0.1.0" ~doc in
-  Cmd.group info [push_group; list_cmd; unassigned_cmd]
+  Cmd.group info [push_group; list_cmd; unassigned_cmd; validate_cmd; conflicts_cmd]
 
 let () = exit (Cmd.eval' default_cmd)
