@@ -31,8 +31,14 @@ let get_owner env =
   get env "DOCDRIVEN_OWNER"
 
 let get_local_path env repo_name =
-  let key = Printf.sprintf "DOCDRIVEN_%s_LOCAL" repo_name in
-  get env key
+  (* Special handling for THIS repo - defaults to current directory *)
+  if repo_name = "THIS" then
+    match get env "DOCDRIVEN_THIS_LOCAL" with
+    | Some path -> Some path
+    | None -> Some "."  (* Default to current directory *)
+  else
+    let key = Printf.sprintf "DOCDRIVEN_%s_LOCAL" repo_name in
+    get env key
 
 let get_github_token env repo_name =
   let key = Printf.sprintf "DOCDRIVEN_%s_GITHUB" repo_name in
@@ -45,11 +51,18 @@ let get_github_token env repo_name =
       | None -> get env "GITHUB_TOKEN"
 
 let get_github_repo env repo_name =
-  let key = Printf.sprintf "DOCDRIVEN_%s_GITHUB_REPO" repo_name in
-  match get env key with
-  | Some repo_string ->
-      (* Parse "owner/repo" format *)
-      (match String.split_on_char '/' repo_string with
-      | [owner; repo] -> Some (String.trim owner, String.trim repo)
-      | _ -> None)
-  | None -> None
+  (* THIS repo should not have GitHub repo configured *)
+  if repo_name = "THIS" then
+    None
+  else
+    let key = Printf.sprintf "DOCDRIVEN_%s_GITHUB_REPO" repo_name in
+    match get env key with
+    | Some repo_string ->
+        (* Parse "owner/repo" format *)
+        (match String.split_on_char '/' repo_string with
+        | [owner; repo] -> Some (String.trim owner, String.trim repo)
+        | _ -> None)
+    | None -> None
+
+let is_this_repo repo_name =
+  repo_name = "THIS"

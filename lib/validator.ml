@@ -4,6 +4,7 @@ type validation_error =
   | InvalidReference of string  (* source_ref *)
   | UnreadableFile of string * string  (* file_path, error *)
   | OwnershipConflict of string * string * string  (* file_path, existing_owner, new_owner *)
+  | ThisRepoHasGithubConfig of string  (* repo_name *)
 
 let string_of_error = function
   | MissingFile (ref, file) ->
@@ -16,6 +17,8 @@ let string_of_error = function
       Printf.sprintf "❌ Cannot read file: %s (%s)" file err
   | OwnershipConflict (file, existing, new_owner) ->
       Printf.sprintf "⚠️  Ownership conflict: %s (existing: %s, attempting: %s)" file existing new_owner
+  | ThisRepoHasGithubConfig repo ->
+      Printf.sprintf "⚠️  Invalid config: '%s' (THIS repo) should not have DOCDRIVEN_THIS_GITHUB_REPO in .env" repo
 
 let validate_source_ref config_dir source_ref =
   match Parser.parse_source_ref source_ref with
@@ -57,6 +60,17 @@ let rec validate_node config_dir rel_path = function
 
 let validate_repo config_dir repo =
   validate_node config_dir "" repo.Config.tree
+
+let validate_this_repo_config env repos =
+  (* Check that THIS repo doesn't have GitHub configuration *)
+  List.filter_map (fun repo ->
+    if Dotenv.is_this_repo repo.Config.name then
+      match Dotenv.get_github_repo env repo.name with
+      | Some _ -> Some (ThisRepoHasGithubConfig repo.name)
+      | None -> None
+    else
+      None
+  ) repos
 
 let validate_config config =
   List.concat_map (validate_repo config.Config.config_dir) config.Config.repos

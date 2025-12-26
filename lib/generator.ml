@@ -16,7 +16,7 @@ let extract_content config_dir source_str =
        | None -> failwith (Printf.sprintf "Codeblock not found: %s" source_str))
   | None -> failwith (Printf.sprintf "Invalid source reference: %s" source_str)
 
-let generate_file config_dir owner output_path source =
+let generate_file_content config_dir owner output_path source =
   let sources, content = match source with
     | Config.Single s -> 
         [s], extract_content config_dir s
@@ -26,12 +26,46 @@ let generate_file config_dir owner output_path source =
                   |> String.concat "\n\n")
   in
   let header = Comments.generate_header output_path owner sources in
-  let full_content = header ^ content in
+  header ^ content
+
+let generate_file config_dir owner output_path source =
+  let full_content = generate_file_content config_dir owner output_path source in
   let dir = Filename.dirname output_path in
   ensure_directory dir;
   Out_channel.with_open_text output_path (fun oc ->
     Out_channel.output_string oc full_content
   )
+
+let rec collect_file_changes config_dir owner base_path rel_path allowed_files diffs = function
+  | Config.File source ->
+      if List.mem rel_path allowed_files then
+        let new_content = generate_file_content config_dir owner base_path source in
+        let change = if Sys.file_exists base_path then
+          let old_content = In_channel.with_open_text base_path In_channel.input_all in
+          if old_content = new_content then None
+          else Some (Diff.Modified (old_content, new_content))
+        else
+          Some (Diff.Added new_content)
+        in
+        match change with
+        | Some ch -> { Diff.path = base_path; change = ch } :: diffs
+        | None -> diffs
+      else diffs
+  | Config.Directory items ->
+      List.fold_left (fun acc (name, node) ->
+        let full_path = Filename.concat base_path name in
+        let new_rel_path = if rel_path = "" then name else rel_path ^ "/" ^ name in
+        collect_file_changes config_dir owner full_path new_rel_path allowed_files acc node
+      ) diffs items
+
+let preview_changes output_dir config_dir owner tree allowed_files =
+  match tree with
+  | Config.Directory items ->
+      List.fold_left (fun acc (name, node) ->
+        let full_path = Filename.concat output_dir name in
+        collect_file_changes config_dir owner full_path name allowed_files acc node
+      ) [] items
+  | Config.File _ -> failwith "Config root must be a directory"
 
 let rec generate_structure config_dir owner base_path rel_path allowed_files = function
   | Config.File source ->

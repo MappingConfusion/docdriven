@@ -8,3 +8,5 @@ module Selector = Selector
 module Interactive = Interactive
 module Validator = Validator
 module Coverage = Coverage
+module Diff = Diff
+module Watch = Watch

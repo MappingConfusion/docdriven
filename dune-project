@@ -17,4 +17,5 @@
   cohttp-lwt-unix
   lwt_ppx
   base64
+  inotify
   (alcotest :with-test)))

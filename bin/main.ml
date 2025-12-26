@@ -15,7 +15,7 @@ let find_repo config repo_name =
   with Not_found ->
     failwith (Printf.sprintf "Repo '%s' not found in config" repo_name)
 
-let push_local config_file repo_names output_dir interactive only exclude =
+let push_local config_file repo_names output_dir interactive only exclude dry_run =
   try
     let config_dir = Filename.dirname config_file in
     let env = Docdriven.Dotenv.load config_dir in
@@ -39,10 +39,34 @@ let push_local config_file repo_names output_dir interactive only exclude =
           | Some d -> d
           | None -> match Docdriven.Dotenv.get_local_path env repo_name with
             | Some d -> d
-            | None -> failwith (Printf.sprintf "DOCDRIVEN_%s_LOCAL not found in .env" repo_name)
+            | None -> 
+                if Docdriven.Dotenv.is_this_repo repo_name then
+                  "."  (* THIS defaults to current directory *)
+                else
+                  failwith (Printf.sprintf "DOCDRIVEN_%s_LOCAL not found in .env" repo_name)
         in
-        Docdriven.Generator.generate dir config.config_dir config.owner repo.tree paths;
-        Printf.printf "[%s] Generated %d files in: %s\n" repo_name (List.length paths) dir
+        (* Resolve relative path to absolute for THIS repo *)
+        let output_path = 
+          if Docdriven.Dotenv.is_this_repo repo_name && not (Filename.is_relative dir |> not) then
+            if dir = "." then config.config_dir else Filename.concat config.config_dir dir
+          else
+            dir
+        in
+        
+        if dry_run then begin
+          (* Preview mode - show diffs *)
+          Printf.printf "\n[%s] Preview of changes:\n" repo_name;
+          let diffs = Docdriven.Generator.preview_changes output_path config.config_dir config.owner repo.tree paths in
+          if diffs = [] then
+            Printf.printf "  No changes detected.\n"
+          else begin
+            List.iter Docdriven.Diff.show_file_diff diffs;
+            Docdriven.Diff.show_summary diffs
+          end
+        end else begin
+          Docdriven.Generator.generate output_path config.config_dir config.owner repo.tree paths;
+          Printf.printf "[%s] Generated %d files in: %s\n" repo_name (List.length paths) output_path
+        end
       ) by_repo;
       0
     end
@@ -54,7 +78,7 @@ let push_local config_file repo_names output_dir interactive only exclude =
       Printf.eprintf "System error: %s\n" msg;
       1
 
-let push_github config_file repo_names token interactive only exclude =
+let push_github config_file repo_names token interactive only exclude dry_run =
   try
     let config_dir = Filename.dirname config_file in
     let env = Docdriven.Dotenv.load config_dir in
@@ -85,11 +109,19 @@ let push_github config_file repo_names token interactive only exclude =
           | None -> failwith (Printf.sprintf "GitHub repo not found. Set DOCDRIVEN_%s_GITHUB_REPO=owner/repo in .env" repo_name)
         in
         let gh_config = { Docdriven.Github.token = gh_token; owner; repo = repo_gh } in
-        match Lwt_main.run (Docdriven.Github.push gh_config repo.tree config.config_dir config.owner paths) with
-        | Ok () ->
-            Printf.printf "[%s] Pushed %d files to GitHub: https://github.com/%s/%s\n" repo_name (List.length paths) owner repo_gh
-        | Error msg ->
-            Printf.eprintf "[%s] Error: %s\n" repo_name msg
+        
+        if dry_run then begin
+          (* Preview mode - show what would be pushed *)
+          Printf.printf "\n[%s] Preview of GitHub push to %s/%s:\n" repo_name owner repo_gh;
+          Printf.printf "  Would push %d files:\n" (List.length paths);
+          List.iter (fun path -> Printf.printf "    + %s\n" path) paths
+        end else begin
+          match Lwt_main.run (Docdriven.Github.push gh_config repo.tree config.config_dir config.owner paths) with
+          | Ok () ->
+              Printf.printf "[%s] Pushed %d files to GitHub: https://github.com/%s/%s\n" repo_name (List.length paths) owner repo_gh
+          | Error msg ->
+              Printf.eprintf "[%s] Error: %s\n" repo_name msg
+        end
       ) by_repo;
       0
     end
@@ -101,7 +133,7 @@ let push_github config_file repo_names token interactive only exclude =
       Printf.eprintf "System error: %s\n" msg;
       1
 
-let push_auto config_file repo_names output_dir token interactive only exclude =
+let push_auto config_file repo_names output_dir token interactive only exclude dry_run =
   let config_dir = Filename.dirname config_file in
   let env = Docdriven.Dotenv.load config_dir in
   let owner = Docdriven.Dotenv.get_owner env in
@@ -123,9 +155,9 @@ let push_auto config_file repo_names output_dir token interactive only exclude =
     ) target_repos in
   
   match has_local, has_github with
-  | true, _ -> push_local config_file repo_names output_dir interactive only exclude
-  | false, true -> push_github config_file repo_names token interactive only exclude
-  | false, false -> push_local config_file repo_names output_dir interactive only exclude
+  | true, _ -> push_local config_file repo_names output_dir interactive only exclude dry_run
+  | false, true -> push_github config_file repo_names token interactive only exclude dry_run
+  | false, false -> push_local config_file repo_names output_dir interactive only exclude dry_run
 
 let list_files config_file repo_names =
   try
@@ -285,6 +317,18 @@ let coverage config_file repo_names output_dirs exclude verbose =
       Printf.eprintf "System error: %s\n" msg;
       1
 
+let watch_files config_file repo_names output_dir only exclude =
+  try
+    Docdriven.Watch.watch_and_regenerate config_file repo_names output_dir only exclude;
+    0
+  with
+  | Failure msg ->
+      Printf.eprintf "Error: %s\n" msg;
+      1
+  | Sys_error msg ->
+      Printf.eprintf "System error: %s\n" msg;
+      1
+
 let config_arg =
   let doc = "Path to the configuration file (default: docdriven.json)" in
   Arg.(value & pos 0 string "docdriven.json" & info [] ~docv:"CONFIG" ~doc)
@@ -313,6 +357,10 @@ let exclude_arg =
   let doc = "Exclude files matching pattern (can be repeated)" in
   Arg.(value & opt_all string [] & info ["exclude"] ~docv:"PATTERN" ~doc)
 
+let dry_run_arg =
+  let doc = "Preview changes without applying them (show diffs)" in
+  Arg.(value & flag & info ["dry-run"; "preview"] ~doc)
+
 let output_dirs_arg =
   let doc = "Output directory for repo (format: REPO=DIR, can be repeated)" in
   Arg.(value & opt_all (pair ~sep:'=' string string) [] & info ["o"; "output"] ~docv:"REPO=DIR" ~doc)
@@ -328,12 +376,12 @@ let limit_arg =
 let push_local_cmd =
   let doc = "generate repository locally" in
   let info = Cmd.info "local" ~doc in
-  Cmd.v info Term.(const push_local $ config_arg $ repos_arg $ output_arg $ interactive_arg $ only_arg $ exclude_arg)
+  Cmd.v info Term.(const push_local $ config_arg $ repos_arg $ output_arg $ interactive_arg $ only_arg $ exclude_arg $ dry_run_arg)
 
 let push_github_cmd =
   let doc = "push repository to GitHub" in
   let info = Cmd.info "github" ~doc in
-  Cmd.v info Term.(const push_github $ config_arg $ repos_arg $ token_arg $ interactive_arg $ only_arg $ exclude_arg)
+  Cmd.v info Term.(const push_github $ config_arg $ repos_arg $ token_arg $ interactive_arg $ only_arg $ exclude_arg $ dry_run_arg)
 
 let list_cmd =
   let doc = "list all files in configuration" in
@@ -360,14 +408,22 @@ let coverage_cmd =
   let info = Cmd.info "coverage" ~doc in
   Cmd.v info Term.(const coverage $ config_arg $ repos_arg $ output_dirs_arg $ exclude_arg $ verbose_arg)
 
+let watch_cmd =
+  let doc = "watch for markdown changes and auto-regenerate files" in
+  let info = Cmd.info "watch" ~doc in
+  Cmd.v info Term.(const watch_files $ config_arg $ repos_arg $ output_arg $ only_arg $ exclude_arg)
+
 let push_group =
   let doc = "push repository to targets" in
   let info = Cmd.info "push" ~doc in
-  Cmd.group info [push_local_cmd; push_github_cmd] ~default:(Term.(const push_auto $ config_arg $ repos_arg $ output_arg $ token_arg $ interactive_arg $ only_arg $ exclude_arg))
+  Cmd.group info [push_local_cmd; push_github_cmd] ~default:(Term.(const push_auto $ config_arg $ repos_arg $ output_arg $ token_arg $ interactive_arg $ only_arg $ exclude_arg $ dry_run_arg))
 
 let default_cmd =
   let doc = "generate repository structures from documented codeblocks" in
   let info = Cmd.info "docdriven" ~version:"0.1.0" ~doc in
-  Cmd.group info [push_group; list_cmd; unassigned_cmd; validate_cmd; conflicts_cmd; coverage_cmd]
+  Cmd.group info [push_group; list_cmd; unassigned_cmd; validate_cmd; conflicts_cmd; coverage_cmd; watch_cmd]
 
-let () = exit (Cmd.eval' default_cmd)
+let () = 
+  (* Disable pager for help by setting MANPAGER to cat *)
+  Unix.putenv "MANPAGER" "cat";
+  exit (Cmd.eval' default_cmd)
