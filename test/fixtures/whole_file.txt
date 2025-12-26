@@ -1,0 +1,3 @@
+This is a complete file content.
+It should be copied as-is without extraction.
+No code blocks here, just plain text.

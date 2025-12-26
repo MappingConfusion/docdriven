@@ -1,0 +1,15 @@
+{
+  "TEST_REPO": {
+    "src": {
+      "main.py": "sample.md[python][0]",
+      "utils.py": [
+        "sample.md[python][1]",
+        "sample.md[python][2]"
+      ]
+    },
+    "config.txt": "whole_file.txt",
+    "sql": {
+      "schema.sql": "sample.md[sql][0]"
+    }
+  }
+}

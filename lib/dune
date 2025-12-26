@@ -1,0 +1,4 @@
+(library
+ (name docdriven)
+ (libraries yojson re str unix cohttp-lwt-unix lwt.unix base64)
+ (preprocess (pps lwt_ppx)))

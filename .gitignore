@@ -1,0 +1,40 @@
+# Dune build artifacts
+_build/
+*.install
+*.merlin
+
+# OCaml compiled files
+*.cmi
+*.cmo
+*.cmx
+*.cma
+*.cmxa
+*.cmxs
+*.cmt
+*.cmti
+*.o
+*.a
+*.so
+*.dll
+*.exe
+
+# OCaml build system
+.merlin
+*.opam~
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.vs/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment files (but not example/.env which is a template)
+/.env
+.env.local

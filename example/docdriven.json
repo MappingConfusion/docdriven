@@ -1,0 +1,22 @@
+{
+  "BACKEND": {
+    "src": {
+      "main.py": [
+        "tutorial.md[python][0]",
+        "tutorial.md[python][1]"
+      ]
+    },
+    "sql": {
+      "schema.sql": "tutorial.md[sql][0]"
+    },
+    "config.json": "config.json"
+  },
+  "FRONTEND": {
+    "src": {
+      "App.js": "tutorial.md[javascript][0]"
+    }
+  },
+  "docs": {
+    "README.md": "tutorial.md"
+  }
+}
