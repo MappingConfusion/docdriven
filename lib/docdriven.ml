@@ -7,3 +7,4 @@ module Dotenv = Dotenv
 module Selector = Selector
 module Interactive = Interactive
 module Validator = Validator
+module Coverage = Coverage

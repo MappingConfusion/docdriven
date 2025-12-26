@@ -1,4 +1,5 @@
 (library
  (name docdriven)
+ (modules config parser generator comments github dotenv selector interactive validator coverage docdriven)
  (libraries yojson re str unix cohttp-lwt-unix lwt.unix base64)
  (preprocess (pps lwt_ppx)))

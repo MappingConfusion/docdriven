@@ -2,6 +2,20 @@
 
 Generate repository structures from documented codeblocks.
 
+## Philosophy
+
+Most documentation is written *after* code and inevitably drifts out of sync.
+
+docdriven inverts this: write the tutorial first, generate the repositories from it.
+
+Your markdown becomes the source of truth. When you update the guide, regenerate the code. No more stale examples, no more "wait, does this still work?" moments.
+
+Designed for:
+- **Tutorial authors** maintaining example repos
+- **Microservices documentation** spanning multiple repositories
+- **Complex systems** where documentation is essential to understand architecture
+- **Teams** coordinating shared documentation with ownership tracking
+
 ## Install
 
 ```bash
@@ -42,6 +56,23 @@ docdriven conflicts -o /path/to/repo   # check for conflicts before pushing
 ```
 
 When multiple documentation sources manage the same repository, this checks for ownership conflicts by reading the `Owner:` field from existing generated files. Helps prevent accidentally overwriting files owned by other teams/docs.
+
+**Analyze coverage:**
+```bash
+docdriven coverage -o BACKEND=/path/to/repo              # check one repo
+docdriven coverage -o BACKEND=/path/to/backend \
+                   -o FRONTEND=/path/to/frontend         # multiple repos
+docdriven coverage --all -o BACKEND=/path              # auto-detect from .env
+docdriven coverage BACKEND --exclude="tests/*" -v        # with exclusions and verbose
+```
+
+Analyzes what percentage of your repository is docdriven-managed versus manually written:
+- Scans repository directories for all files
+- Identifies which files have docdriven headers
+- Calculates coverage statistics
+- Automatically excludes common build/dependency directories (node_modules, _build, etc.)
+- Use `--exclude` to skip additional patterns
+- Use `--verbose` to see detailed file listings
 
 **Push to local:**
 ```bash

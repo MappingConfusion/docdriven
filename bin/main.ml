@@ -256,6 +256,35 @@ let check_conflicts config_file output_dir =
       Printf.eprintf "System error: %s\n" msg;
       1
 
+let coverage config_file repo_names output_dirs exclude verbose =
+  try
+    let config_dir = Filename.dirname config_file in
+    let env = Docdriven.Dotenv.load config_dir in
+    let owner = Docdriven.Dotenv.get_owner env in
+    let config = Docdriven.Config.load_config config_file owner in
+    
+    (* Build directory map from CLI args and .env *)
+    let dir_map = List.fold_left (fun acc repo_name ->
+      let dir = try
+        List.assoc repo_name output_dirs
+      with Not_found ->
+        match Docdriven.Dotenv.get_local_path env repo_name with
+        | Some d -> d
+        | None -> failwith (Printf.sprintf "Directory not specified for '%s'. Use -o REPO=DIR or set DOCDRIVEN_%s_LOCAL in .env" repo_name repo_name)
+      in
+      (repo_name, dir) :: acc
+    ) [] (if repo_names = [] then List.map (fun r -> r.Docdriven.Config.name) config.repos else repo_names) in
+    
+    Docdriven.Coverage.analyze_coverage config repo_names dir_map exclude verbose;
+    0
+  with
+  | Failure msg ->
+      Printf.eprintf "Error: %s\n" msg;
+      1
+  | Sys_error msg ->
+      Printf.eprintf "System error: %s\n" msg;
+      1
+
 let config_arg =
   let doc = "Path to the configuration file (default: docdriven.json)" in
   Arg.(value & pos 0 string "docdriven.json" & info [] ~docv:"CONFIG" ~doc)
@@ -283,6 +312,14 @@ let only_arg =
 let exclude_arg =
   let doc = "Exclude files matching pattern (can be repeated)" in
   Arg.(value & opt_all string [] & info ["exclude"] ~docv:"PATTERN" ~doc)
+
+let output_dirs_arg =
+  let doc = "Output directory for repo (format: REPO=DIR, can be repeated)" in
+  Arg.(value & opt_all (pair ~sep:'=' string string) [] & info ["o"; "output"] ~docv:"REPO=DIR" ~doc)
+
+let verbose_arg =
+  let doc = "Show detailed file listings" in
+  Arg.(value & flag & info ["v"; "verbose"] ~doc)
 
 let limit_arg =
   let doc = "Limit number of results (0 for unlimited, default: 10)" in
@@ -318,6 +355,11 @@ let conflicts_cmd =
   let info = Cmd.info "conflicts" ~doc in
   Cmd.v info Term.(const check_conflicts $ config_arg $ Arg.(required & opt (some string) None & info ["o"; "output"] ~docv:"DIR" ~doc:"Output directory to check"))
 
+let coverage_cmd =
+  let doc = "analyze what percentage of repository is docdriven-managed" in
+  let info = Cmd.info "coverage" ~doc in
+  Cmd.v info Term.(const coverage $ config_arg $ repos_arg $ output_dirs_arg $ exclude_arg $ verbose_arg)
+
 let push_group =
   let doc = "push repository to targets" in
   let info = Cmd.info "push" ~doc in
@@ -326,6 +368,6 @@ let push_group =
 let default_cmd =
   let doc = "generate repository structures from documented codeblocks" in
   let info = Cmd.info "docdriven" ~version:"0.1.0" ~doc in
-  Cmd.group info [push_group; list_cmd; unassigned_cmd; validate_cmd; conflicts_cmd]
+  Cmd.group info [push_group; list_cmd; unassigned_cmd; validate_cmd; conflicts_cmd; coverage_cmd]
 
 let () = exit (Cmd.eval' default_cmd)
