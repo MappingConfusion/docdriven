@@ -152,6 +152,63 @@ let list_files config_file repo_names =
       Printf.eprintf "System error: %s\n" msg;
       1
 
+let unassigned_blocks config_file limit =
+  try
+    let config = Docdriven.Config.load_config config_file in
+    let limit_value = match limit with
+      | None -> Some 10
+      | Some 0 -> None
+      | Some n -> Some n
+    in
+    let (total, unassigned_count, percentage, blocks) = 
+      Docdriven.Parser.find_unassigned config.config_dir config limit_value in
+    
+    Printf.printf "Codeblock Coverage Analysis:\n";
+    Printf.printf "─────────────────────────────────────────────────\n";
+    Printf.printf "Total codeblocks:      %d\n" total;
+    Printf.printf "Assigned codeblocks:   %d\n" (total - unassigned_count);
+    Printf.printf "Unassigned codeblocks: %d (%.1f%%)\n\n" unassigned_count percentage;
+    
+    if unassigned_count = 0 then begin
+      Printf.printf "✓ All codeblocks are assigned!\n";
+      0
+    end else begin
+      let showing = List.length blocks in
+      if showing < unassigned_count then
+        Printf.printf "Showing first %d unassigned codeblocks:\n\n" showing
+      else
+        Printf.printf "Unassigned codeblocks:\n\n";
+      
+      (* Group by file for better readability *)
+      let by_file = List.fold_left (fun acc block ->
+        let existing = try List.assoc block.Docdriven.Parser.ref_file acc with Not_found -> [] in
+        (block.ref_file, block :: existing) :: (List.remove_assoc block.ref_file acc)
+      ) [] blocks in
+      
+      List.iter (fun (file, file_blocks) ->
+        Printf.printf "%s:\n" file;
+        List.iter (fun block ->
+          Printf.printf "  %s[%s][%d]\n" 
+            block.Docdriven.Parser.ref_file 
+            block.ref_language 
+            block.ref_index
+        ) (List.rev file_blocks);
+        Printf.printf "\n"
+      ) (List.rev by_file);
+      
+      if showing < unassigned_count then
+        Printf.printf "Use --limit 0 to show all %d unassigned codeblocks\n" unassigned_count;
+      
+      0
+    end
+  with
+  | Failure msg ->
+      Printf.eprintf "Error: %s\n" msg;
+      1
+  | Sys_error msg ->
+      Printf.eprintf "System error: %s\n" msg;
+      1
+
 let config_arg =
   let doc = "Path to the configuration file (default: docdriven.json)" in
   Arg.(value & pos 0 string "docdriven.json" & info [] ~docv:"CONFIG" ~doc)
@@ -180,6 +237,10 @@ let exclude_arg =
   let doc = "Exclude files matching pattern (can be repeated)" in
   Arg.(value & opt_all string [] & info ["exclude"] ~docv:"PATTERN" ~doc)
 
+let limit_arg =
+  let doc = "Limit number of results (0 for unlimited, default: 10)" in
+  Arg.(value & opt (some int) None & info ["limit"] ~docv:"N" ~doc)
+
 let push_local_cmd =
   let doc = "generate repository locally" in
   let info = Cmd.info "local" ~doc in
@@ -195,6 +256,11 @@ let list_cmd =
   let info = Cmd.info "list" ~doc in
   Cmd.v info Term.(const list_files $ config_arg $ repos_arg)
 
+let unassigned_cmd =
+  let doc = "find unassigned codeblocks in documentation" in
+  let info = Cmd.info "unassigned" ~doc in
+  Cmd.v info Term.(const unassigned_blocks $ config_arg $ limit_arg)
+
 let push_group =
   let doc = "push repository to targets" in
   let info = Cmd.info "push" ~doc in
@@ -203,6 +269,6 @@ let push_group =
 let default_cmd =
   let doc = "generate repository structures from documented codeblocks" in
   let info = Cmd.info "docdriven" ~version:"0.1.0" ~doc in
-  Cmd.group info [push_group; list_cmd]
+  Cmd.group info [push_group; list_cmd; unassigned_cmd]
 
 let () = exit (Cmd.eval' default_cmd)

@@ -16,6 +16,15 @@ docdriven list                  # all repos
 docdriven list BACKEND          # specific repo only
 ```
 
+**Find unassigned codeblocks:**
+```bash
+docdriven unassigned               # first 10 unassigned blocks
+docdriven unassigned --limit 20    # first 20 unassigned blocks
+docdriven unassigned --limit 0     # all unassigned blocks
+```
+
+Shows which codeblocks in your documentation aren't assigned to any repository files, helping identify documentation gaps.
+
 **Push to local:**
 ```bash
 docdriven push local BACKEND              # one repo

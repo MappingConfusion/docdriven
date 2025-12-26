@@ -33,14 +33,15 @@ let generate_file config_dir output_path source =
     Out_channel.output_string oc full_content
   )
 
-let rec generate_structure config_dir base_path allowed_files = function
+let rec generate_structure config_dir base_path rel_path allowed_files = function
   | Config.File source ->
-      if List.mem base_path allowed_files then
+      if List.mem rel_path allowed_files then
         generate_file config_dir base_path source
   | Config.Directory items ->
       List.iter (fun (name, node) ->
         let full_path = Filename.concat base_path name in
-        generate_structure config_dir full_path allowed_files node
+        let new_rel_path = if rel_path = "" then name else rel_path ^ "/" ^ name in
+        generate_structure config_dir full_path new_rel_path allowed_files node
       ) items
 
 let generate output_dir config_dir tree allowed_files =
@@ -50,6 +51,6 @@ let generate output_dir config_dir tree allowed_files =
   | Config.Directory items ->
       List.iter (fun (name, node) ->
         let full_path = Filename.concat output_dir name in
-        generate_structure config_dir full_path allowed_files node
+        generate_structure config_dir full_path name allowed_files node
       ) items
   | Config.File _ -> failwith "Config root must be a directory"
